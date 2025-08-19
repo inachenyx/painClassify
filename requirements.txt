@@ -1,6 +1,6 @@
 numpy
 pandas
-scipy
+scipy==1.11.4
 matplotlib
 scikit-learn
 scikit-plot
