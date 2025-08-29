@@ -97,7 +97,7 @@ for i,feat in enumerate(forviolin_tick):
     violin_with_annotations(feat, axes[i], pvals)
 plt.tight_layout()
 plt.savefig("violin_FDR.png", dpi=300)
-
+plt.show()
 # ---------------------------
 # 4B. Side-by-side raw vs corrected
 # ---------------------------
@@ -113,5 +113,5 @@ for feat in forviolin_tick:
         ax.set_title(f"{feat} ({label})")
     plt.tight_layout()
     plt.savefig(f"violin_{feat}_raw_vs_corrected.png", dpi=300)
-    plt.close()
+    plt.show()
 
