@@ -83,8 +83,21 @@ def violin_with_annotations(feature, ax, pvals):
     pairs = [("mild","moderate"),("moderate","severe"),("mild","severe")]
     annotator = Annotator(ax, pairs, x=df["label"], y=df[feature])
     annotator.set_pvalues_and_annotate(list(pvals))
+    ax.tick_params(labelsize=16)
+    for spine in ["top", "left", "right"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines['bottom'].set_linewidth(1.5)
+    ax.grid(axis='y', ls='--', c='gray')
+    ax.set_axisbelow(True)
+    font = {'family': 'arial', 'weight': 'bold', 'color': 'black', 'fontsize': 18}
+    ax.set_xlabel('class', fontdict=font)
+    ax.set_ylabel(feature, fontdict=font)
     return ax
 
+plt.rcParams['font.family'] = 'Arial'
+# ---------------------------
+# Full 8-feature FDR panel
+#
 # Build a dict of FDR p-values for each feature
 fdr_map = {}
 for feat in forviolin_tick:
@@ -95,23 +108,71 @@ axes = axes.ravel()
 for i,feat in enumerate(forviolin_tick):
     pvals = fdr_map[feat]
     violin_with_annotations(feat, axes[i], pvals)
+# Add numbering to each subplot
+axes_flat = axes.flatten()
+subnum = ['a','b','c','d','e','f','g','h']
+for n, ax in zip(subnum, axes_flat):
+    ax.text(-0.22, 1, f'({n})', transform=ax.transAxes,
+            fontsize=20, fontweight='bold', va='top', ha='left')
 plt.tight_layout()
 plt.savefig("violin_FDR.png", dpi=300)
 plt.show()
 # ---------------------------
-# 4B. Side-by-side raw vs corrected
+# Full 8-feature Bonferroni panel
 # ---------------------------
+bonf_map = {}
 for feat in forviolin_tick:
-    fig, axs = plt.subplots(1,3, figsize=(15,5))
-    for j,(label, col) in enumerate(zip(["Raw","Bonferroni","FDR"],
-                                        ["pval_raw","pval_bonf","pval_fdr"])):
-        ax = sns.violinplot(x=df["label"], y=df[feat],
-                            palette=['#99BAFE','#F6A789','#E16852'], ax=axs[j])
-        pairs = [("mild","moderate"),("moderate","severe"),("mild","severe")]
-        annotator = Annotator(ax, pairs, x=df["label"], y=df[feat])
-        annotator.set_pvalues_and_annotate(list(resdf.loc[resdf["feature"]==feat, col]))
-        ax.set_title(f"{feat} ({label})")
-    plt.tight_layout()
-    plt.savefig(f"violin_{feat}_raw_vs_corrected.png", dpi=300)
-    plt.show()
+    bonf_map[feat] = resdf.loc[resdf["feature"]==feat, "pval_bonf"].values
 
+fig, axes = plt.subplots(2,4, figsize=(18,7))
+axes = axes.ravel()
+for i,feat in enumerate(forviolin_tick):
+    pvals = bonf_map[feat]
+    violin_with_annotations(feat, axes[i], pvals)
+# Add numbering to each subplot
+axes_flat = axes.flatten()
+subnum = ['a','b','c','d','e','f','g','h']
+for n, ax in zip(subnum, axes_flat):
+    ax.text(-0.2, 1, f'({n})', transform=ax.transAxes,
+            fontsize=20, fontweight='bold', va='top', ha='left')
+plt.tight_layout()
+plt.savefig("violin_Bonferroni.png", dpi=300)
+plt.show()
+# ---------------------------
+# Full 8-feature raw panel
+# ---------------------------
+raw_map = {}
+for feat in forviolin_tick:
+    raw_map[feat] = resdf.loc[resdf["feature"]==feat, "pval_raw"].values
+
+fig, axes = plt.subplots(2,4, figsize=(18,7))
+axes = axes.ravel()
+for i,feat in enumerate(forviolin_tick):
+    pvals = raw_map[feat]
+    violin_with_annotations(feat, axes[i], pvals)
+# Add numbering to each subplot
+axes_flat = axes.flatten()
+subnum = ['a','b','c','d','e','f','g','h']
+for n, ax in zip(subnum, axes_flat):
+    ax.text(-0.2, 1, f'({n})', transform=ax.transAxes,
+            fontsize=20, fontweight='bold', va='top', ha='left')
+plt.tight_layout()
+plt.savefig("violin_raw.png", dpi=300)
+plt.show()
+# # ---------------------------
+# # 4B. Side-by-side raw vs corrected
+# # ---------------------------
+# for feat in forviolin_tick:
+#     fig, axs = plt.subplots(1,3, figsize=(15,5))
+#     for j,(label, col) in enumerate(zip(["Raw","Bonferroni","FDR"],
+#                                         ["pval_raw","pval_bonf","pval_fdr"])):
+#         ax = sns.violinplot(x=df["label"], y=df[feat],
+#                             palette=['#99BAFE','#F6A789','#E16852'], ax=axs[j])
+#         pairs = [("mild","moderate"),("moderate","severe"),("mild","severe")]
+#         annotator = Annotator(ax, pairs, x=df["label"], y=df[feat])
+#         annotator.set_pvalues_and_annotate(list(resdf.loc[resdf["feature"]==feat, col]))
+#         ax.set_title(f"{feat} ({label})")
+#     plt.tight_layout()
+#     plt.savefig(f"violin_{feat}_raw_vs_corrected.png", dpi=300)
+#     plt.show()
+#
