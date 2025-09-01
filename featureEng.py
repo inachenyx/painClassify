@@ -20,11 +20,11 @@ from sklearn.metrics import make_scorer, balanced_accuracy_score
 RANDOM_STATE = 42
 
 # classifier options: "extratrees", "logreg", "lda"
-CLASSIFIER = "extratrees"
+CLASSIFIER = ""
 
 # ranking options for cumulative-importance figure:
 # "extratrees_impurity" or "cv_permutation"
-RANKING_FOR_CUMULATIVE = "cv_permutation"
+RANKING_FOR_CUMULATIVE = "extratrees_impurity"
 
 # ranking used inside the pipeline selector for perf-vs-k:
 # "extratrees_impurity" (fast) or "rf_impurity" (also ok)
@@ -163,6 +163,7 @@ class SelectTopKFromModel(BaseEstimator, TransformerMixin):
             class_weight="balanced"
         )
         self.k = k
+        self.random_state = random_state
 
     def fit(self, X, y):
         self.est_ = clone(self.base_estimator)
@@ -208,6 +209,7 @@ def plot_cumulative_importance(X, y, method=RANKING_FOR_CUMULATIVE, groups=group
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(fname, dpi=300)
+    plt.show()
 
     # Export CSV
     out = pd.DataFrame({
@@ -298,6 +300,7 @@ def perf_vs_k_plot(X, y, groups, selector_ranking=SELECTOR_RANKING,
 
     plt.tight_layout()
     plt.savefig(fname, dpi=300)
+    plt.show()
 
     out = pd.DataFrame({"k": ks, "mean": means, "std": stds})
     out.to_csv("performance_vs_features.csv", index=False)

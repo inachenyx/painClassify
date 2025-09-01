@@ -12,7 +12,7 @@ feature=['max','min','mean','med','peak','arv','var','std','kurtosis',\
                 'skewness','rms','rs','rmsa','waveformF','peakF','impulseF','clearanceF',\
                 'FC','MSF','RMSF','VF','RVF',\
                 'SKMean','SKStd','SKSkewness','SKKurtosis','psdE','svdpE','eE','ApEn', 'SpEn','FuzzyEn','PeEn','enveEn',\
-                'detaDE','thetaDE','alphaDE','betaDE', 'gammaDE']
+                'deltaDE','thetaDE','alphaDE','betaDE', 'gammaDE']
 finallydata=np.array(data1['allfeature'])#960*78
 #print(finallydata.shape)
 featuremap= {}
@@ -71,7 +71,7 @@ from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 """选择特征"""
 selectFeature=['alphaDE_ch2','gammaDE_ch1','betaDE_ch1','PeEn_ch1','betaDE_ch2'
 ,'peak_ch1','alphaDE_ch1','gammaDE_ch2','PeEn_ch2','thetaDE_ch2'
-,'rmsa_ch1','rs_ch2','ApEn_ch1','rmsa_ch2','RMSF_ch1','detaDE_ch1'
+,'rmsa_ch1','rs_ch2','ApEn_ch1','rmsa_ch2','RMSF_ch1','deltaDE_ch1'
 ,'SpEn_ch1','psdE_ch2','arv_ch1','peak_ch2']
 forviolin_tick=['alphaDE_ch1','gammaDE_ch1','betaDE_ch1','PeEn_ch1','alphaDE_ch2','betaDE_ch2','gammaDE_ch2','PeEn_ch2']
 selectFeatureIndex=np.empty((20),dtype=int)
