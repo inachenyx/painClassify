@@ -10,7 +10,8 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import StratifiedGroupKFold, cross_val_score, cross_val_predict, RandomizedSearchCV, learning_curve
+from sklearn.model_selection import cross_val_score, cross_val_predict, RandomizedSearchCV, learning_curve
+from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from scipy.stats import randint, uniform
 
@@ -66,8 +67,10 @@ rf.fit(X, y)
 importances = rf.feature_importances_
 indices = np.argsort(importances)[::-1]
 sorted_features = [feature_names[i] for i in indices]
-
-cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+# -------------Define CV here--------------
+#cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+# -------------Overfit 10-fold CV--------------
+cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
 mean_scores = []
 for k in range(5, 79, 5):
     X_topk = X[:, indices[:k]]
@@ -142,6 +145,8 @@ results = {} # mean
 scores_summary = {} # mean, std
 for name, model in best_models.items():
     scores = cross_val_score(model, X_top20, y, cv=cv, groups=groups, scoring="accuracy")
+    scores_summary[name] = (scores.mean(), scores.std())
+    print(f"{name:>5}: mean={scores.mean():.3f} ± {scores.std():.3f}")
     results[name] = scores.mean()
 
 sorted_models = sorted(results.items(), key=lambda x: x[1], reverse=True)
