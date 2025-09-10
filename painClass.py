@@ -138,7 +138,8 @@ for name, (model, param_dist) in search_spaces.items():
 # ---------------------------
 # 5. Evaluate tuned models
 # ---------------------------
-results = {}
+results = {} # mean
+scores_summary = {} # mean, std
 for name, model in best_models.items():
     scores = cross_val_score(model, X_top20, y, cv=cv, groups=groups, scoring="accuracy")
     results[name] = scores.mean()
