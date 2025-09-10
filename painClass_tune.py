@@ -27,7 +27,7 @@ Models: A variety of models were trained and tuned for best hyperparameters.
 The top 4 models were used to train a Voting Classifier.
 StratifiedKFold cv was used for all nested cross-validations. 
 """
-
+rndst = 50
 # ---------------------------
 # 1. Load and prepare data
 # ---------------------------
@@ -63,15 +63,31 @@ y = le.fit_transform(y_str)   # mild=0, moderate=1, severe=2
 groups = np.repeat(np.arange(20), 48)   # subject IDs
 
 # ---------------------------
+# Define CV here (prevents one-class folds during CV scoring)
+# ---------------------------
+def _safe_splits_for_groups(y, groups, requested):
+    # number of unique subjects in each class
+    counts = [len(np.unique(groups[y == c])) for c in np.unique(y)]
+    max_splits = max(2, min(counts))  # at least 2
+    if requested > max_splits:
+        print(f"[note] Reducing n_splits from {requested} to {max_splits} "
+              f"because some classes have only {max_splits} subject-groups.")
+        return max_splits
+    return requested
+
+requested_splits = 5  # whatever you currently use
+n_splits_safe = _safe_splits_for_groups(y, groups, requested_splits)
+cv = StratifiedGroupKFold(n_splits=n_splits_safe, shuffle=True, random_state=rndst)
+
+# ---------------------------
 # 2.1 Feature importance + trade-off plot
 # ---------------------------
-rf = RandomForestClassifier(random_state=42, n_estimators=200)
+rf = RandomForestClassifier(random_state=rndst, n_estimators=200)
 rf.fit(X, y)
 importances = rf.feature_importances_
 indices = np.argsort(importances)[::-1]
 sorted_features = [feature_names[i] for i in indices]
 
-cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
 mean_scores = []
 for k in range(5, 79, 5):
     X_topk = X[:, indices[:k]]
@@ -89,13 +105,12 @@ plt.show()
 # ---------------------------
 # 2.2 ET Top-20 feature importance with ExtraTrees
 # ---------------------------
-et_tmp = ExtraTreesClassifier(n_estimators=400, random_state=42, n_jobs=-1)
+et_tmp = ExtraTreesClassifier(n_estimators=400, random_state=rndst, n_jobs=-1)
 et_tmp.fit(X, y)
 importances = et_tmp.feature_importances_
 idx = np.argsort(importances)[::-1]
 sorted_f = [feature_names[i] for i in idx]
 
-cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
 mean_scores = []
 for k in range(5, 79, 5):
     X_topk = X[:, idx[:k]]
@@ -119,24 +134,31 @@ X_top20 = X[:, indices[:20]]
 search_spaces = {
     "LDA": (LinearDiscriminantAnalysis(), {
         "solver": ["svd", "lsqr", "eigen"],
-        "shrinkage": [None, "auto"]
+        "n_components": [1,2,None],
+        "tol": np.linspace(0.0001, 0.001, 10)
     }),
-    "DT": (DecisionTreeClassifier(random_state=42), {
-        "max_depth": randint(3, 20),
-        "min_samples_split": randint(2, 20)
+    "DT": (DecisionTreeClassifier(random_state=rndst), {
+        "max_depth": [3,15,100,None],
+        "max_features": randint(1, 11),
+        "min_samples_split": randint(2, 11),
+        "min_samples_leaf": randint(4, 11),
+        "criterion": ["gini", "entropy"]
     }),
-    "ET": (ExtraTreesClassifier(random_state=42), {
-        "n_estimators": randint(100, 500),
-        "max_depth": randint(5, 30),
-        "min_samples_split": randint(2, 20)
+    "ET": (ExtraTreesClassifier(random_state=rndst), {
+        "n_estimators": [10,50,100,200],
+        "max_depth": [5, 10, 15, 20],
+        "min_samples_split": [2, 5, 10],
+        "min_samples_leaf": [1, 2, 4],
+        "bootstrap": [True, False]
     }),
-    "GBDT": (GradientBoostingClassifier(random_state=42), {
-        "n_estimators": randint(100, 500),
-        "learning_rate": uniform(0.01, 0.3),
-        "max_depth": randint(2, 10)
+    "GBDT": (GradientBoostingClassifier(random_state=rndst), {
+        "n_estimators": range(30,150),
+        "learning_rate": np.arange(0.01, 0.5, 0.01),
+        "max_depth": range(2,7),
+        "max_features": range(2,9)
     }),
     "NB": (GaussianNB(), {}),
-    "RF": (RandomForestClassifier(random_state=42), {
+    "RF": (RandomForestClassifier(random_state=rndst), {
         "n_estimators": randint(100, 500),
         "max_depth": randint(5, 30),
         "min_samples_split": randint(2, 20)
@@ -147,7 +169,7 @@ search_spaces = {
     }),
     # "SVM": (Pipeline([
     #     ("scaler", StandardScaler()),
-    #     ("svc", SVC(probability=True, random_state=42))
+    #     ("svc", SVC(probability=True, random_state=rndst))
     # ]), {
     #     "svc__kernel": ["rbf", "linear"],
     #     "svc__C": uniform(0.1, 100.0),
@@ -165,7 +187,7 @@ for name, (model, param_dist) in search_spaces.items():
         continue
     search = RandomizedSearchCV(
         model, param_distributions=param_dist,
-        n_iter=20, cv=cv, scoring="accuracy", n_jobs=-1, random_state=42
+        n_iter=20, cv=cv, scoring="accuracy", n_jobs=-1, random_state=rndst
     )
     search.fit(X_top20, y, groups=groups)
     best_models[name] = search.best_estimator_
@@ -209,14 +231,22 @@ final_vc.fit(X_top20, y)
 # ---------------------------
 # 7. Learning curve
 # ---------------------------
+# Keep your group-aware CV "cv" for everything else (tuning, scoring, etc.)
+# Use a *sample-level* stratified CV only for the learning curve:
+lc_cv = StratifiedKFold(n_splits=cv.n_splits if hasattr(cv, "n_splits") else 5,
+                        shuffle=True, random_state=rndst)
 train_sizes, train_scores, val_scores = learning_curve(
-    final_vc, X_top20, y, cv=cv, groups=groups,
-    train_sizes=np.linspace(0.1, 1.0, 5), scoring="accuracy", n_jobs=-1
+    final_vc, X_top20, y, cv=lc_cv,
+    # groups=groups,
+    train_sizes=np.linspace(0.1, 1.0, 5), scoring="accuracy", n_jobs=-1,
+    shuffle=True, random_state=rndst
 )
 
+train_mean = np.nanmean(train_scores, axis=1)
+val_mean = np.nanmean(val_scores, axis=1)
 plt.figure(figsize=(7,5))
-plt.plot(train_sizes, train_scores.mean(axis=1), 'o-', label="Training")
-plt.plot(train_sizes, val_scores.mean(axis=1), 'o-', label="Validation")
+plt.plot(train_sizes, train_mean, 'o-', label="Training")
+plt.plot(train_sizes, val_mean, 'o-', label="Validation")
 plt.xlabel("Training size")
 plt.ylabel("Accuracy")
 plt.title("Learning Curve (VotingClassifier)")
