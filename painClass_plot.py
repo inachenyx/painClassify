@@ -351,12 +351,16 @@ cm = confusion_matrix(y, y_pred, normalize="true")
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=le.classes_)
 
 fig, ax = plt.subplots(figsize=(5, 5))
-disp.plot(ax=ax, cmap='Blues', values_format=".2f", colorbar=True)
+disp.plot(ax=ax, cmap='Blues', values_format=".2f", colorbar=False)
+# plt.colorbar(disp.im_, ax=ax, shrink=0.75)
+plt.colorbar(disp.im_, fraction=0.046, pad=0.04)
+
+
 ax.set_title("Normalized Confusion Matrix")
 ax.set_xlabel("Predicted label")
 ax.set_ylabel("True label")
 # Rotate y-axis labels to be vertical
-plt.setp(ax.get_yticklabels(), rotation=90, va='center')
+ax.tick_params(axis='y', rotation=90)
 plt.tight_layout()
 plt.show()
 
