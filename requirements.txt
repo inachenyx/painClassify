@@ -9,3 +9,4 @@ statannotations
 joblib
 threadpoolctl
 statsmodels
+imbalanced-learn
