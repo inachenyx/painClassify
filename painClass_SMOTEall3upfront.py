@@ -32,7 +32,7 @@ plt.rcParams['font.family'] = 'Arial'
 # plt.rcParams['font.weight'] = 'bold'
 plt.rcParams['font.size'] = 12
 
-rndst = 20
+rndst = 16
 # ---------------------------
 # 1. Load and prepare data
 # ---------------------------
