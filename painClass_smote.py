@@ -21,48 +21,47 @@ from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.base import BaseSampler
 
-
-class SafeSMOTE(BaseSampler):
-    def __init__(self, sampling_strategy, random_state=42, k_neighbors=5):
-        self.sampling_strategy = sampling_strategy
-        self.random_state = random_state
-        self.k_neighbors = k_neighbors
-
-    def _fit_resample(self, X, y):
-        y = np.asarray(y)
-        classes_present = set(np.unique(y))
-
-        # Expect a dict like {2: target_count}
-        if isinstance(self.sampling_strategy, dict):
-            wanted = set(self.sampling_strategy.keys())
-            # If target class (e.g., 2) is not present -> passthrough
-            if not wanted.issubset(classes_present):
-                return X, y
-
-            # Ensure k_neighbors < n_samples(minority)
-            counts = {cls: np.sum(y == cls) for cls in wanted}
-            # If any wanted class has only 1 sample -> cannot SMOTE -> passthrough
-            if any(c <= 1 for c in counts.values()):
-                return X, y
-
-            k = min(self.k_neighbors, min(c - 1 for c in counts.values()))
-            sm = SMOTE(sampling_strategy=self.sampling_strategy,
-                       random_state=self.random_state,
-                       k_neighbors=k)
-            try:
-                return sm.fit_resample(X, y)
-            except Exception:
-                # As a safety net, fall back to passthrough
-                return X, y
-
-        # Fallback for non-dict strategies: try, else passthrough
-        try:
-            sm = SMOTE(sampling_strategy=self.sampling_strategy,
-                       random_state=self.random_state,
-                       k_neighbors=self.k_neighbors)
-            return sm.fit_resample(X, y)
-        except Exception:
-            return X, y
+# class SafeSMOTE(BaseSampler):
+#     def __init__(self, sampling_strategy, random_state=42, k_neighbors=5):
+#         self.sampling_strategy = sampling_strategy
+#         self.random_state = random_state
+#         self.k_neighbors = k_neighbors
+#
+#     def _fit_resample(self, X, y):
+#         y = np.asarray(y)
+#         classes_present = set(np.unique(y))
+#
+#         # Expect a dict like {2: target_count}
+#         if isinstance(self.sampling_strategy, dict):
+#             wanted = set(self.sampling_strategy.keys())
+#             # If target class (e.g., 2) is not present -> passthrough
+#             if not wanted.issubset(classes_present):
+#                 return X, y
+#
+#             # Ensure k_neighbors < n_samples(minority)
+#             counts = {cls: np.sum(y == cls) for cls in wanted}
+#             # If any wanted class has only 1 sample -> cannot SMOTE -> passthrough
+#             if any(c <= 1 for c in counts.values()):
+#                 return X, y
+#
+#             k = min(self.k_neighbors, min(c - 1 for c in counts.values()))
+#             sm = SMOTE(sampling_strategy=self.sampling_strategy,
+#                        random_state=self.random_state,
+#                        k_neighbors=k)
+#             try:
+#                 return sm.fit_resample(X, y)
+#             except Exception:
+#                 # As a safety net, fall back to passthrough
+#                 return X, y
+#
+#         # Fallback for non-dict strategies: try, else passthrough
+#         try:
+#             sm = SMOTE(sampling_strategy=self.sampling_strategy,
+#                        random_state=self.random_state,
+#                        k_neighbors=self.k_neighbors)
+#             return sm.fit_resample(X, y)
+#         except Exception:
+#             return X, y
 
 """
 Dataset: 20 subjects each with 48 segments of data (960 segments total). Each subject belongs to one level of pain.
@@ -118,8 +117,8 @@ target = max(counts[0], counts[1])  # match mild/moderate size
 APPLY_SMOTE = counts[2] < target    # only apply if severe is smaller
 
 if APPLY_SMOTE:
-    smote = SafeSMOTE(
-        sampling_strategy={2: int(target)},   # upsample class 2 only
+    smote = SMOTE(
+        sampling_strategy={2: int(target)},   # upsample class 2 only, or "minority"
         random_state=rndst,
         k_neighbors=5                          # leave default; adjust if needed
     )
@@ -266,7 +265,7 @@ for name, (model, param_dist) in search_spaces.items():
         continue
     search = RandomizedSearchCV(
         model_for_search, param_distributions=param_dist_for_search,
-        n_iter=20, cv=cv, scoring="accuracy", n_jobs=-1, random_state=rndst,
+        n_iter=25, cv=cv, scoring="accuracy", n_jobs=-1, random_state=rndst,
         refit=True, verbose=0
     )
     search.fit(X_top20, y, groups=groups)
