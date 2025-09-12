@@ -18,6 +18,8 @@ from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from scipy.stats import randint, uniform
 from imblearn.over_sampling import SMOTE
+from sklearn.preprocessing import label_binarize
+from sklearn.metrics import roc_curve, auc
 
 """
 Dataset: 20 subjects each with 48 segments of data (960 segments total). Each subject belongs to one level of pain.
@@ -96,7 +98,6 @@ groups  = groups[mask_keep]
 print("[prune] dropped subjects:", to_drop)
 
 # 3) upsample each class to 7 subjects worth of segments
-from imblearn.over_sampling import SMOTE
 segments_per_subject = int(np.bincount(groups).max())
 TARGET_SUBJECTS_PER_CLASS = 7
 target_per_class = TARGET_SUBJECTS_PER_CLASS * segments_per_subject  # e.g., 7*48 = 336 per class
@@ -442,9 +443,99 @@ ax.tick_params(axis='y', rotation=90)
 plt.tight_layout()
 plt.show()
 
+# ---------------------------
+# 9. Histogram plot
+# ---------------------------
+models_for_plot = top4_names + ["Voting"]
+name_to_est = {name: best_models[name] for name in top4_names}
+name_to_est["Voting"] = final_vc
 
+scorers = [
+    ("accuracy", "accuracy"),
+    ("precision_macro", "precision_macro"),
+    ("recall_macro", "recall_macro"),
+    ("f1_macro", "f1_macro"),
+]
 
+means = []
+stds  = []
+for m in models_for_plot:
+    est = name_to_est[m]
+    m_means = []
+    m_stds  = []
+    for label, scoring in scorers:
+        sc = cross_val_score(est, X_top20, y, cv=cv, groups=groups,
+                             scoring=scoring, n_jobs=-1)
+        m_means.append(np.nanmean(sc))
+        m_stds.append(np.nanstd(sc))
+    means.append(m_means)
+    stds.append(m_stds)
 
+means = np.array(means)  # shape: (n_models, 4)
+stds  = np.array(stds)
+
+plt.figure(figsize=(9, 5))
+n_models = len(models_for_plot)
+n_metrics = len(scorers)
+x = np.arange(n_models)
+width = 0.18
+
+for j, (label, _) in enumerate(scorers):
+    plt.bar(x + (j - (n_metrics-1)/2)*width, means[:, j], width=width,
+            yerr=stds[:, j], capsize=3, label=label)
+
+plt.xticks(x, models_for_plot, rotation=0)
+plt.ylabel("Score")
+plt.title("CV metrics (mean ± std)")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# ---------------------------
+# 10. AUROC
+# ---------------------------
+classes = np.unique(y)
+n_classes = len(classes)
+y_bin = label_binarize(y, classes=classes)
+
+def proba_cv(est):
+    # out-of-fold probabilities with the same CV you use for evaluation
+    return cross_val_predict(est, X_top20, y, cv=cv, groups=groups,
+                             method="predict_proba", n_jobs=-1)
+
+plt.figure(figsize=(7, 5))
+
+for name in models_for_plot:
+    est = name_to_est[name]
+    # need probabilities; skip if not available
+    has_proba = hasattr(est, "predict_proba")
+    try:
+        if not has_proba:
+            continue
+        prob = proba_cv(est)  # shape (N, n_classes)
+        # macro-average ROC
+        fpr = dict(); tpr = dict(); roc_auc = dict()
+        for i, c in enumerate(classes):
+            fpr[i], tpr[i], _ = roc_curve(y_bin[:, i], prob[:, i])
+            roc_auc[i] = auc(fpr[i], tpr[i])
+        # aggregate macro
+        all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+        mean_tpr = np.zeros_like(all_fpr)
+        for i in range(n_classes):
+            mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+        mean_tpr /= n_classes
+        macro_auc = auc(all_fpr, mean_tpr)
+        plt.plot(all_fpr, mean_tpr, label=f"{name} (macro AUC={macro_auc:.3f})")
+    except Exception as e:
+        print(f"[AUROC] skipping {name}: {e}")
+
+plt.plot([0, 1], [0, 1], linestyle="--")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("Macro-averaged ROC (out-of-fold)")
+plt.legend()
+plt.tight_layout()
+plt.show()
 
 
 
