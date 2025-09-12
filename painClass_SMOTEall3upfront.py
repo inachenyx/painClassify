@@ -18,6 +18,8 @@ from sklearn.model_selection import StratifiedKFold, StratifiedGroupKFold
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from scipy.stats import randint, uniform
 from imblearn.over_sampling import SMOTE
+from sklearn.preprocessing import label_binarize
+from sklearn.metrics import roc_curve, auc
 
 """
 Dataset: 20 subjects each with 48 segments of data (960 segments total). Each subject belongs to one level of pain.
@@ -187,6 +189,16 @@ plt.title("Feature Selection Trade-off")
 plt.grid(True)
 plt.show()
 
+# === Export 2.1 trade-off (RF) ===
+k_list = list(range(5, 79, 5))  # 15 points
+pd.DataFrame({
+    "k": k_list,
+    "cv_accuracy": mean_scores  # from the loop you just computed
+}).to_csv("tradeoff_rf.csv", index=False)
+print("[saved] tradeoff_rf.csv")
+# === end export ===
+
+
 # ---------------------------
 # 2.2 ET Top-20 feature importance with ExtraTrees
 # ---------------------------
@@ -209,6 +221,15 @@ plt.ylabel("CV Accuracy (EF)")
 plt.title("Feature Selection Trade-off")
 plt.grid(True)
 plt.show()
+
+# === Export 2.2 trade-off (ET) ===
+k_list = list(range(5, 79, 5))  # 15 points
+pd.DataFrame({
+    "k": k_list,
+    "cv_accuracy": mean_scores  # from the ET loop you just computed
+}).to_csv("tradeoff_et.csv", index=False)
+print("[saved] tradeoff_et.csv")
+# === end export ===
 
 # Choose top-20 features for next step
 X_top20 = X[:, indices[:20]]
@@ -413,20 +434,34 @@ ax.legend()
 plt.tight_layout()
 plt.show()
 
-# plt.figure(figsize=(7,5))
-# plt.plot(train_sizes, train_mean, 'o-', label="Training")
-# plt.plot(train_sizes, val_mean, 'o-', label="Validation")
-# plt.xlabel("Training size")
-# plt.ylabel("Accuracy")
-# plt.title("Learning Curve (VotingClassifier)")
-# plt.legend()
-# plt.grid(True)
-# plt.show()
+# === Export: learning curve (means & stds) ===
+train_mean = np.nanmean(train_scores, axis=1)
+train_std  = np.nanstd(train_scores, axis=1)
+cv_mean    = np.nanmean(val_scores, axis=1)
+cv_std     = np.nanstd(val_scores, axis=1)
+
+pd.DataFrame({
+    "train_size": train_sizes,
+    "train_mean": train_mean,
+    "train_std":  train_std,
+    "cv_mean":    cv_mean,
+    "cv_std":     cv_std
+}).to_csv("learning_curve.csv", index=False)
+print("[saved] learning_curve.csv")
+# === end export ===
+
 
 # ---------------------------
 # 8. Confusion Matrix
 # ---------------------------
 y_pred = cross_val_predict(final_vc, X_top20, y, cv=cv, groups=groups)
+
+# === Export: confusion-matrix pairs (y_true, y_pred) ===
+df_cm = pd.DataFrame({"y_true": y, "y_pred": y_pred})
+df_cm.to_csv("confusion_pairs.csv", index=False)
+print("[saved] confusion_pairs.csv")
+# === end export ===
+
 # Row-normalized confusion matrix: each row sums to 1.0
 cm = confusion_matrix(y, y_pred, normalize="true")
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=le.classes_)
@@ -445,8 +480,155 @@ ax.tick_params(axis='y', rotation=90)
 plt.tight_layout()
 plt.show()
 
+# ---------------------------
+# 9. Histogram plot
+# ---------------------------
+models_for_plot = top4_names + ["Voting"]
+name_to_est = {name: best_models[name] for name in top4_names}
+name_to_est["Voting"] = final_vc
+
+scorers = [
+    ("accuracy", "accuracy"),
+    ("precision_macro", "precision_macro"),
+    ("recall_macro", "recall_macro"),
+    ("f1_macro", "f1_macro"),
+]
+
+means = []
+stds  = []
+for m in models_for_plot:
+    est = name_to_est[m]
+    m_means = []
+    m_stds  = []
+    for label, scoring in scorers:
+        sc = cross_val_score(est, X_top20, y, cv=cv, groups=groups,
+                             scoring=scoring, n_jobs=-1)
+        m_means.append(np.nanmean(sc))
+        m_stds.append(np.nanstd(sc))
+    means.append(m_means)
+    stds.append(m_stds)
+
+means = np.array(means)  # shape: (n_models, 4)
+stds  = np.array(stds)
+
+plt.figure(figsize=(9, 5))
+n_models = len(models_for_plot)
+n_metrics = len(scorers)
+x = np.arange(n_models)
+width = 0.18
+
+for j, (label, _) in enumerate(scorers):
+    plt.bar(x + (j - (n_metrics-1)/2)*width, means[:, j], width=width,
+            yerr=stds[:, j], capsize=3, label=label)
+
+plt.xticks(x, models_for_plot, rotation=0)
+plt.ylabel("Score")
+plt.title("CV metrics (mean ± std)")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# columns: model, metric_mean, metric_std (wide format)
+cols = []
+for label, _ in [("accuracy","accuracy"), ("precision_macro","precision_macro"),
+                 ("recall_macro","recall_macro"), ("f1_macro","f1_macro")]:
+    cols.extend([f"{label}_mean", f"{label}_std"])
+
+df_metrics = pd.DataFrame(columns=["model"] + cols)
+for i, m in enumerate(models_for_plot):
+    row = {"model": m}
+    j = 0
+    for label, _ in [("accuracy","accuracy"), ("precision_macro","precision_macro"),
+                     ("recall_macro","recall_macro"), ("f1_macro","f1_macro")]:
+        row[f"{label}_mean"] = float(means[i, j])
+        row[f"{label}_std"]  = float(stds[i, j])
+        j += 1
+    df_metrics.loc[len(df_metrics)] = row
+
+df_metrics.to_csv("metrics_histogram.csv", index=False)
+print("[saved] metrics_histogram.csv")
 
 
+# ---------------------------
+# 10. AUROC
+# ---------------------------
+classes = np.unique(y)
+n_classes = len(classes)
+y_bin = label_binarize(y, classes=classes)
+
+def proba_cv(est):
+    # out-of-fold probabilities with the same CV you use for evaluation
+    return cross_val_predict(est, X_top20, y, cv=cv, groups=groups,
+                             method="predict_proba", n_jobs=-1)
+
+plt.figure(figsize=(7, 5))
+
+for name in models_for_plot:
+    est = name_to_est[name]
+    # need probabilities; skip if not available
+    has_proba = hasattr(est, "predict_proba")
+    try:
+        if not has_proba:
+            continue
+        prob = proba_cv(est)  # shape (N, n_classes)
+        # macro-average ROC
+        fpr = dict(); tpr = dict(); roc_auc = dict()
+        for i, c in enumerate(classes):
+            fpr[i], tpr[i], _ = roc_curve(y_bin[:, i], prob[:, i])
+            roc_auc[i] = auc(fpr[i], tpr[i])
+        # aggregate macro
+        all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+        mean_tpr = np.zeros_like(all_fpr)
+        for i in range(n_classes):
+            mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+        mean_tpr /= n_classes
+        macro_auc = auc(all_fpr, mean_tpr)
+        plt.plot(all_fpr, mean_tpr, label=f"{name} (macro AUC={macro_auc:.3f})")
+    except Exception as e:
+        print(f"[AUROC] skipping {name}: {e}")
+
+plt.plot([0, 1], [0, 1], linestyle="--")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("Macro-averaged ROC (out-of-fold)")
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# Build a common FPR grid and interpolate each model’s macro-TPR onto it
+
+fpr_grid = np.linspace(0.0, 1.0, 1001)
+roc_table = pd.DataFrame({"fpr": fpr_grid})
+
+# You probably computed mean_tpr and macro_auc inside the plot loop.
+# Recompute once here and store columns; skip models w/o predict_proba.
+for name in models_for_plot:
+    est = name_to_est[name]
+    if not hasattr(est, "predict_proba"):
+        print(f"[ROC] skipping {name} (no predict_proba)")
+        continue
+    prob = cross_val_predict(est, X_top20, y, cv=cv,
+                             groups=groups, method="predict_proba", n_jobs=-1)
+
+    # one-vs-rest ROC, then macro-average
+    from sklearn.preprocessing import label_binarize
+    from sklearn.metrics import roc_curve, auc
+    classes = np.unique(y)
+    y_bin = label_binarize(y, classes=classes)
+    fpr = {}; tpr = {}
+    for i, c in enumerate(classes):
+        fpr[i], tpr[i], _ = roc_curve(y_bin[:, i], prob[:, i])
+
+    all_fpr = np.unique(np.concatenate([fpr[i] for i in range(len(classes))]))
+    mean_tpr = np.zeros_like(fpr_grid)
+    # interpolate each class TPR onto the common grid and average
+    for i in range(len(classes)):
+        mean_tpr += np.interp(fpr_grid, fpr[i], tpr[i], left=0.0, right=1.0)
+    mean_tpr /= len(classes)
+    roc_table[f"tpr_{name}"] = mean_tpr
+
+roc_table.to_csv("roc_curves.csv", index=False)
+print("[saved] roc_curves.csv")
 
 
 
