@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import cross_val_score, cross_val_predict, RandomizedSearchCV, learning_curve
 
-
+plt.rcParams['font.family'] = 'Arial'
+plt.rcParams['font.weight'] = 'bold'
+plt.rcParams['font.size'] = 14
 # ---------------------------
 # 8. Confusion Matrix
 # ---------------------------
@@ -27,10 +29,10 @@ disp.plot(ax=ax, cmap='Blues', values_format=".2f", colorbar=False)
 # plt.colorbar(disp.im_, ax=ax, shrink=0.75)
 plt.colorbar(disp.im_, fraction=0.046, pad=0.04)
 
-
-ax.set_title("Normalized Confusion Matrix")
-ax.set_xlabel("Predicted label")
-ax.set_ylabel("True label")
+font_dict={'fontname': "Arial", 'fontsize': 14, 'fontweight': 'bold'}
+ax.set_title("Normalized Confusion Matrix", fontdict=font_dict)
+ax.set_xlabel("Predicted label", fontdict=font_dict)
+ax.set_ylabel("True label", fontdict=font_dict)
 # Rotate y-axis labels to be vertical
 ax.tick_params(axis='y', rotation=90)
 plt.tight_layout()
