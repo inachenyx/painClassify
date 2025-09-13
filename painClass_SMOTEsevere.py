@@ -371,6 +371,22 @@ plt.show()
 # plt.grid(True)
 # plt.show()
 
+# === Export: learning curve (means & stds) ===
+train_mean = np.nanmean(train_scores, axis=1)
+train_std  = np.nanstd(train_scores, axis=1)
+cv_mean    = np.nanmean(val_scores, axis=1)
+cv_std     = np.nanstd(val_scores, axis=1)
+
+pd.DataFrame({
+    "train_size": train_sizes,
+    "train_mean": train_mean,
+    "train_std":  train_std,
+    "cv_mean":    cv_mean,
+    "cv_std":     cv_std
+}).to_csv("learning_curve.csv", index=False)
+print("[saved] learning_curve.csv")
+# === end export ===
+
 # ---------------------------
 # 8. Confusion Matrix
 # ---------------------------
